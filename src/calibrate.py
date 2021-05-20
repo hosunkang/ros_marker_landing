@@ -25,7 +25,7 @@ CHARUCO_BOARD = aruco.CharucoBoard_create(
 	markerLength=0.02,
 	dictionary=ARUCO_DICT)
 
-class image_converter:
+class cameraCalibration:
     def __init__(self):
         # Corners discovered in all images processed
         # Aruco ids corresponding to corners discovered 
@@ -97,7 +97,7 @@ class image_converter:
             # Pause to display each image, waiting for key press
             cv2.imshow('Charuco board', cv_image)
             key = cv2.waitKey(1)
-            if key == ord('q'):
+            if key & 0xFF == ord('q') or key == 27:
                 rospy.loginfo('Total {} capture images for Calibration'.format(self.capturecount))
                 cv2.destroyAllWindows()
                 rospy.signal_shutdown('Program terminate')
@@ -128,14 +128,14 @@ class image_converter:
         else:
             cv2.imshow('Charuco board', cv_image)
             key = cv2.waitKey(1)
-            if key == ord('q'):
+            if key & 0xFF == ord('q') or key == 27:
                 rospy.loginfo('Total {} capture images for Calibration'.format(self.capturecount))
                 cv2.destroyAllWindows()
                 rospy.signal_shutdown('Program terminate')
 
 def main(args):
-    ic = image_converter()
-    rospy.init_node('image_converter', anonymous=True)
+    ic = cameraCalibration()
+    rospy.init_node('cameraCalibration', anonymous=True)
     try:
         rospy.spin()
     except KeyboardInterrupt:
