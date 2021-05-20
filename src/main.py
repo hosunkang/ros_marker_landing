@@ -18,7 +18,7 @@ class markerLanding:
                                 [-1,-1,1], [-1,1,1], [1,1,1], [1,-1,1] ])  
         self.bridge = CvBridge()
         self.image_sub = rospy.Subscriber("camera/color/image_raw", 
-                                            Image, self.mage_callback)
+                                            Image, self.image_callback)
         if not os.path.exists('CameraCalibration.pckl'):
             print("You need to calibrate the camera you'll be using. See calibration project directory for details.")
             exit()
@@ -68,9 +68,6 @@ class markerLanding:
                         continue
                 else:
                     cv2_img = aruco.drawAxis(cv2_img, self.cameraMatrix, self.distCoeffs, rvec, tvec, 1)
-                
-        cv2.imshow('test frame', cv2_img)
-        
 
         # Press esc or 'q' to close the image window
         key = cv2.waitKey(1)
