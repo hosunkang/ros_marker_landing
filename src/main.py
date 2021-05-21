@@ -9,7 +9,7 @@ import numpy as np
 import os, pickle
 
 ARUCO_PARAMETERS = aruco.DetectorParameters_create()
-ARUCO_DICT = aruco.Dictionary_get(aruco.DICT_5X5_50)
+ARUCO_DICT = aruco.Dictionary_get(aruco.DICT_5X5_100)
 
 class markerLanding:
     def __init__(self):
@@ -58,25 +58,17 @@ class markerLanding:
 
         if ids is not None and len(ids) > 0:
             # Estimate the posture per each Aruco marker
-            rotation_vectors, translation_vectors, _objPoints = aruco.estimatePoseSingleMarkers(corners, 1, cameraMatrix, distCoeffs)
-            for rvec, tvec in zip(rotation_vectors, translation_vectors):
-                if len(sys.argv) == 2 and sys.argv[1] == 'cube':
-                    try:
-                        imgpts, jac = cv2.projectPoints(self.axis, rvec, tvec, self.cameraMatrix, self.distCoeffs)
-                        cv2_img = self.drawCube(cv2_img, corners, imgpts)
-                    except:
-                        continue
-                else:
-                    cv2_img = aruco.drawAxis(cv2_img, self.cameraMatrix, self.distCoeffs, rvec, tvec, 1)
+            # opencv 3.2.0
+            rvec, tvec = aruco.estimatePoseSingleMarkers(corners, 1, self.cameraMatrix, self.distCoeffs)
+            cv2_img = aruco.drawAxis(cv2_img, self.cameraMatrix, self.distCoeffs, rvec, tvec, 1)
 
         # Press esc or 'q' to close the image window
+        cv2.imshow('image', cv2_img)
         key = cv2.waitKey(1)
         if key & 0xFF == ord('q') or key == 27:
             rospy.loginfo('Exit program')
             cv2.destroyAllWindows()
             rospy.signal_shutdown('Program terminate')
-
-        cv2.imshow('image', cv2_img)
 
 def main(args):
     ml = markerLanding()
