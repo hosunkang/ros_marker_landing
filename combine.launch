@@ -1,0 +1,6 @@
+<launch>
+    <node name="imu" pkg="landing" type="imu.py">
+    </node>
+    <include file="$(find realsense2_camera)/launch/rs_camera.launch">
+    </include>
+</launch>
