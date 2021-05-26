@@ -83,7 +83,7 @@ def getleg(Rcm,imu):
     Rlt1 = np.dot(np.dot(Rlm, rotationMatrix(-c, 'z')), Rxpi)
     Rlt2 = np.dot(Rlt1, rotationMatrix(math.pi,'z'))
 
-    return Rmat2euler_zyx(Rlt1)
+    return Rmat2euler_zyx(Rlt2)
 
 def mean(datas):
     return sum(datas)/len(datas)
@@ -138,6 +138,7 @@ class markerLanding:
             Rmat, jacobian = cv2.Rodrigues(rvec)
             
             x,y,z = getleg(Rmat, self.imu)
+            #datas = '*{:.2f},{:.2f},{:.2f}\n'.format(x,y,z)
 
             if self.count < self.moveavg_flag:
                 self.moveavg_x.append(x)
