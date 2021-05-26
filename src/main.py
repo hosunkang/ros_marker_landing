@@ -2,33 +2,57 @@
 import sys
 import rospy
 from sensor_msgs.msg import Image
+from std_msgs.msg import String
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import cv2.aruco as aruco
 import numpy as np
 import os, pickle
 import serial
+import serial.tools.list_ports_linux as sp
 import math
 
 ARUCO_PARAMETERS = aruco.DetectorParameters_create()
 ARUCO_DICT = aruco.Dictionary_get(aruco.DICT_5X5_100)
-ser = serial.Serial('/dev/ttyACM0', baudrate=115200)
 
 def ra2de(ra):
     return ra*180/math.pi
 
+def de2ra(de):
+    return de*math.pi/180
+
 def Rmat2euler_yxz(rmat):
     [[r11,r12,r13],[r21,r22,r23],[r31,r32,r33]] = rmat
-    x = math.atan2(-r23, math.sqrt(pow(r21,2)+pow(r22,2)))
-    y = math.atan2(r13,r33)
-    z = math.atan2(r21,r22)
+    if r23 < 1:
+        if r23 > -1:
+            x = math.asin(-r23)
+            y = math.atan2(r13,r33)
+            z = math.atan2(r21,r22)
+        else:
+            x = math.pi/2
+            y = -math.atan2(-r12,r11)
+            z = 0
+    else:
+        x = -math.pi/2
+        y = math.atan2(-r12,r11)
+        z = 0
     return x,y,z
 
 def Rmat2euler_zyx(rmat):
     [[r11,r12,r13],[r21,r22,r23],[r31,r32,r33]] = rmat
-    x = math.atan2(r32,r33)
-    y = math.atan2(-r31, math.sqrt(pow(r32,2)+pow(r33,2)))
-    z = math.atan2(r21,r11)
+    if r31 < 1:
+        if r31 > -1:
+            x = math.atan2(r32,r33)
+            y = math.asin(-r31)
+            z = math.atan2(r21,r11)
+        else:
+            x = 0
+            y = math.pi/2
+            z = -math.atan2(-r23,r22)
+    else:
+        x = 0
+        y = -math.pi/2
+        z = math.atan2(-r23,r22)
     return ra2de(x), ra2de(y), ra2de(z)    
 
 def rotationMatrix(angle, flag):
@@ -47,13 +71,16 @@ def rotationMatrix(angle, flag):
     return mat
 
 Rxpi = rotationMatrix(math.pi, 'x')
+Rypi = rotationMatrix(math.pi, 'y')
 
 def getleg(Rcm,imu):
+    imu = [de2ra(imu[0]), de2ra(-imu[1]), de2ra(-imu[2])]
     Rlb = np.dot(np.dot(Rxpi,rotationMatrix(imu[1], 'y')), rotationMatrix(imu[0],'x'))
-    Rbc = Rxpi
-    Rlm = np.dot(np.dot(Rlb, Rbc), Rcm)
+    Rbc = Rypi
+    Rlm = np.dot(np.dot(Rlb,  Rbc), Rcm)
     a,b,c = Rmat2euler_yxz(Rlm)
-    Rlt1 = np.dot(np.dot(rotationMatrix(b, 'y'), rotationMatrix(a, 'x')), Rxpi)
+    #Rlt1 = np.dot(np.dot(rotationMatrix(b, 'y'), rotationMatrix(a, 'x')), Rxpi)
+    Rlt1 = np.dot(np.dot(Rlm, rotationMatrix(-c, 'z')), Rxpi)
     Rlt2 = np.dot(Rlt1, rotationMatrix(math.pi,'z'))
 
     return Rmat2euler_zyx(Rlt1)
@@ -73,6 +100,9 @@ class markerLanding:
         self.bridge = CvBridge()
         self.image_sub = rospy.Subscriber("camera/color/image_raw", 
                                             Image, self.image_callback)
+        self.imu_sub = rospy.Subscriber("imudata", String, self.imu_callback)
+        self.euler_pub = rospy.Publisher("eulerdata", String, queue_size=30)
+
         if not os.path.exists('CameraCalibration.pckl'):
             print("You need to calibrate the camera you'll be using. See calibration project directory for details.")
             exit()
@@ -83,20 +113,10 @@ class markerLanding:
             if self.cameraMatrix is None or self.distCoeffs is None:
                 print("Calibration issue. Remove CameraCalibration.pckl and recalibrate your camera with calibration_ChAruco.py.")
                 exit()
-    
-    def drawCube(self, corners, imgpts):
-        imgpts = np.int32(imgpts).reshape(-1,2)
 
-        # draw ground floor in green
-        # img = cv2.drawContours(img, [imgpts[:4]],-1,(0,255,0),-3)
-
-        # draw pillars in blue color
-        for i,j in zip(range(4),range(4,8)):
-            img = cv2.line(img, tuple(imgpts[i]), tuple(imgpts[j]),(255),3)
-
-        # draw top layer in red color
-        img = cv2.drawContours(img, [imgpts[4:]],-1,(0,0,255),3)
-        return img
+    def imu_callback(self, data):
+        datas = str(data)
+        self.imu = map(float,datas.split('*')[1].split('\\')[0].split(','))
 
     def image_callback(self,data):
         try:
@@ -116,10 +136,8 @@ class markerLanding:
             cv2_img = aruco.drawAxis(cv2_img, self.cameraMatrix, self.distCoeffs, rvec, tvec, 1)
 
             Rmat, jacobian = cv2.Rodrigues(rvec)
-            imu = [0,0,0]
-            x,y,z = getleg(Rmat, imu)
-            datas = '*{:.2f},{:.2f},{:.2f}'.format(x,y,z)
-            #print('Before : {}'.format(datas))
+            
+            x,y,z = getleg(Rmat, self.imu)
 
             if self.count < self.moveavg_flag:
                 self.moveavg_x.append(x)
@@ -129,8 +147,8 @@ class markerLanding:
                 self.moveavg_y[self.count%self.moveavg_flag] = y
             self.count += 1
             datas = '*{:.2f},{:.2f},{:.2f}\n'.format(mean(self.moveavg_x),mean(self.moveavg_y),z)
-            print('After : {}'.format(datas))
-            ser.write(datas)
+            self.euler_pub.publish(datas)
+            print(datas)
 
         # Press esc or 'q' to close the image window
         cv2.imshow('image', cv2_img)
