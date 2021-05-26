@@ -9,16 +9,12 @@ from rospy.topics import Publisher
 from std_msgs.msg import String
 
 list = sp.comports()
-connected= []
-for i in list:
-    PORTAPPLY = 'sudo chmod 666 ' + i.device
-    os.system(PORTAPPLY)
-    connected.append(i.device)
+PORTAPPLY = 'sudo chmod 666 ' + list.device
+os.system(PORTAPPLY)
+ser = serial.Serial(list.device, baudrate=115200)
 
 def de2ra(de):
     return de*math.pi/180
-
-ser = serial.Serial('/dev/ttyUSB0', baudrate=115200)
 
 class imuaction:
     def __init__(self):
@@ -33,6 +29,9 @@ class imuaction:
     def euler_caller(self, data):
         datas = str(data)
         euler = datas.split('"')[1]
+        euler = euler.split('\\')[0]
+        euler = euler+"\n"
+        print(euler)
         ser.write(euler)
 
 if __name__ == '__main__':
